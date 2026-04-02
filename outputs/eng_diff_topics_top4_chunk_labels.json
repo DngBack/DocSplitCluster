@@ -1,0 +1,211 @@
+{
+  "file_name": "eng_diff_topics/eng_diff_topics_top4_shuffled.pdf",
+  "keywords": {
+    "finance": [
+      {
+        "keyword": "finance report",
+        "description": "Corporate financial reporting pages with monetary values and statements."
+      },
+      {
+        "keyword": "financial statement",
+        "description": "Documents containing balance sheet, income statement, or cash-flow content."
+      },
+      {
+        "keyword": "accounting document",
+        "description": "Accounting-oriented forms, totals, and period-based financial tables."
+      }
+    ],
+    "health": [
+      {
+        "keyword": "medical document",
+        "description": "Healthcare-related pages including diagnosis, treatment, or patient guidance."
+      },
+      {
+        "keyword": "health fact sheet",
+        "description": "Public health educational sheets and disease/prevention information."
+      },
+      {
+        "keyword": "clinical information",
+        "description": "Clinical terminology, screening references, and care instructions."
+      }
+    ],
+    "math": [
+      {
+        "keyword": "mathematics lecture notes",
+        "description": "Math course pages with definitions, theorems, and derivations."
+      },
+      {
+        "keyword": "homework problems",
+        "description": "Exercise sheets containing problem statements and solution structure."
+      },
+      {
+        "keyword": "math equations",
+        "description": "Pages dominated by formulas, symbols, and mathematical expressions."
+      }
+    ]
+  },
+  "chunks": [
+    {
+      "chunk_index": 0,
+      "start_page": 0,
+      "end_page": 3,
+      "num_pages": 4,
+      "gt_label": "health",
+      "pred_label": "health",
+      "pred_page_labels": [
+        "health",
+        "health",
+        "health",
+        "health"
+      ],
+      "scores": {
+        "finance": 0.34715189039707184,
+        "health": 0.3962729200720787,
+        "math": 0.3396427407860756
+      }
+    },
+    {
+      "chunk_index": 1,
+      "start_page": 4,
+      "end_page": 7,
+      "num_pages": 4,
+      "gt_label": "math",
+      "pred_label": "math",
+      "pred_page_labels": [
+        "math",
+        "math",
+        "math",
+        "math"
+      ],
+      "scores": {
+        "finance": 0.38203277438879013,
+        "health": 0.35033685714006424,
+        "math": 0.5216051340103149
+      }
+    },
+    {
+      "chunk_index": 2,
+      "start_page": 8,
+      "end_page": 10,
+      "num_pages": 3,
+      "gt_label": "health",
+      "pred_label": "health",
+      "pred_page_labels": [
+        "health",
+        "health",
+        "health"
+      ],
+      "scores": {
+        "finance": 0.31578414638837177,
+        "health": 0.4962121844291687,
+        "math": 0.3401713768641154
+      }
+    },
+    {
+      "chunk_index": 3,
+      "start_page": 11,
+      "end_page": 12,
+      "num_pages": 2,
+      "gt_label": "math",
+      "pred_label": "math",
+      "pred_page_labels": [
+        "math",
+        "math"
+      ],
+      "scores": {
+        "finance": 0.3729076087474823,
+        "health": 0.34322284162044525,
+        "math": 0.5120561867952347
+      }
+    },
+    {
+      "chunk_index": 4,
+      "start_page": 13,
+      "end_page": 15,
+      "num_pages": 3,
+      "gt_label": "finance",
+      "pred_label": "finance",
+      "pred_page_labels": [
+        "finance",
+        "finance",
+        "finance"
+      ],
+      "scores": {
+        "finance": 0.36082321405410767,
+        "health": 0.3080762028694153,
+        "math": 0.34439411759376526
+      }
+    },
+    {
+      "chunk_index": 5,
+      "start_page": 16,
+      "end_page": 17,
+      "num_pages": 2,
+      "gt_label": "health",
+      "pred_label": "health",
+      "pred_page_labels": [
+        "health",
+        "health"
+      ],
+      "scores": {
+        "finance": 0.3177243173122406,
+        "health": 0.4461006075143814,
+        "math": 0.32825835049152374
+      }
+    },
+    {
+      "chunk_index": 6,
+      "start_page": 18,
+      "end_page": 19,
+      "num_pages": 2,
+      "gt_label": "health",
+      "pred_label": "health",
+      "pred_page_labels": [
+        "health",
+        "health"
+      ],
+      "scores": {
+        "finance": 0.35327567160129547,
+        "health": 0.45594219863414764,
+        "math": 0.37007948756217957
+      }
+    },
+    {
+      "chunk_index": 7,
+      "start_page": 20,
+      "end_page": 22,
+      "num_pages": 3,
+      "gt_label": "finance",
+      "pred_label": "finance",
+      "pred_page_labels": [
+        "finance",
+        "finance",
+        "finance"
+      ],
+      "scores": {
+        "finance": 0.39368916551272076,
+        "health": 0.33840734759966534,
+        "math": 0.3376549184322357
+      }
+    },
+    {
+      "chunk_index": 8,
+      "start_page": 23,
+      "end_page": 26,
+      "num_pages": 4,
+      "gt_label": "finance",
+      "pred_label": "finance",
+      "pred_page_labels": [
+        "finance",
+        "finance",
+        "finance",
+        "finance"
+      ],
+      "scores": {
+        "finance": 0.40990182012319565,
+        "health": 0.3352941423654556,
+        "math": 0.3307410776615143
+      }
+    }
+  ]
+}
