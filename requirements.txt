@@ -1,0 +1,21 @@
+# VieDocSplit — run_boundary_baseline.py
+# Python 3.12+ recommended (venv: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt)
+
+# PDF + images
+pymupdf>=1.24.0
+Pillow>=10.0.0
+
+numpy>=1.24.0
+einops>=0.7.0
+# ColVintern processor (processing_colinternvl2.py) imports decord at module load time
+decord>=0.6.0
+
+# PyTorch — colpali_engine pins torch<2.11 (see upstream pyproject)
+torch>=2.2.0,<2.11.0
+torchvision>=0.17.0
+
+# Hugging Face (generic AutoModel fallback)
+transformers>=5.3.0,<6.0.0
+
+# ColSmol / ColIdefics3 (vidore/colSmol-256M) — installs colpali_engine
+git+https://github.com/illuin-tech/colpali.git
