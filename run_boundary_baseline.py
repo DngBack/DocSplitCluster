@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Page-level semantic boundary baseline using ColSmol embeddings.
 
-Pipeline:
+Default pipeline (multiview + local margin):
 1) Load one PDF entry from `data/grouth_truth.json`
 2) Render each page to PIL image
-3) Compute one embedding per page with `vidore/colSmol-256M`
-4) Score adjacent-page continuity using cosine similarity
-5) Predict boundaries by threshold
-6) Compute hard + soft boundary metrics
+3) For each page: embed full page, top/bottom halves, top/mid/bottom thirds
+4) Edge score s_i = weighted sum of cosines (full, half-bridge, third-bridge, mid-third)
+5) Local margin m_i = s_i - (s_{i-1} + s_{i+1}) / 2 (end edges mirror neighbors)
+6) Predict cut where m_i < threshold; enforce max chunk length
+7) Hard + soft boundary metrics
+
+Legacy mode: `--legacy-full-page-cosine` uses one embedding per page and cosine(full_i, full_{i+1}).
 """
 
 from __future__ import annotations
@@ -67,8 +70,14 @@ def parse_args() -> argparse.Namespace:
         "--threshold",
         type=float,
         default=None,
-        help="Boundary threshold on cosine score (< threshold => cut). "
-        "If omitted, script searches best threshold from scores + GT.",
+        help="Multiview: boundary when local margin m_i < threshold. "
+        "Legacy: boundary when adjacent full-page cosine < threshold. "
+        "If omitted, best threshold is searched from GT.",
+    )
+    parser.add_argument(
+        "--legacy-full-page-cosine",
+        action="store_true",
+        help="Use one full-page embedding per page + adjacent cosine (old baseline).",
     )
     parser.add_argument(
         "--soft-window",
@@ -237,6 +246,116 @@ def cosine_adjacent(embeddings: np.ndarray) -> np.ndarray:
     return sims.astype(np.float32)
 
 
+MULTIVIEW_KEYS = (
+    "full",
+    "top_half",
+    "bottom_half",
+    "top_third",
+    "mid_third",
+    "bottom_third",
+)
+
+
+def split_page_multiview(page: "Image.Image") -> Dict[str, "Image.Image"]:
+    w, h = page.size
+    hh = h // 2
+    t1 = h // 3
+    t2 = (2 * h) // 3
+    return {
+        "full": page,
+        "top_half": page.crop((0, 0, w, hh)),
+        "bottom_half": page.crop((0, hh, w, h)),
+        "top_third": page.crop((0, 0, w, t1)),
+        "mid_third": page.crop((0, t1, w, t2)),
+        "bottom_third": page.crop((0, t2, w, h)),
+    }
+
+
+def embed_multiview_per_page(
+    pages: Sequence["Image.Image"],
+    model_name: str,
+    device: "torch.device",
+    batch_size: int,
+) -> Dict[str, np.ndarray]:
+    """Return dict name -> (N, D) numpy embeddings for each multiview crop."""
+    if not pages:
+        return {k: np.zeros((0, 0), dtype=np.float32) for k in MULTIVIEW_KEYS}
+
+    flat_pages: List["Image.Image"] = []
+    for page in pages:
+        crops = split_page_multiview(page)
+        for key in MULTIVIEW_KEYS:
+            flat_pages.append(crops[key])
+
+    flat_emb = embed_pages(
+        pages=flat_pages,
+        model_name=model_name,
+        device=device,
+        batch_size=batch_size,
+    )
+    n = len(pages)
+    if flat_emb.shape[0] != n * len(MULTIVIEW_KEYS):
+        raise RuntimeError("Multiview embedding rows do not match 6 * page count.")
+
+    reshaped = flat_emb.reshape(n, len(MULTIVIEW_KEYS), -1)
+    return {MULTIVIEW_KEYS[i]: reshaped[:, i, :].astype(np.float32) for i in range(len(MULTIVIEW_KEYS))}
+
+
+def edge_scores_multiview(emb: Dict[str, np.ndarray]) -> np.ndarray:
+    """Weighted continuity s_i for edge i -> i+1 (length N-1)."""
+    full = emb["full"]
+    if full.shape[0] < 2:
+        return np.array([], dtype=np.float32)
+
+    c_full = np.sum(full[:-1] * full[1:], axis=1)
+    c_bh_th = np.sum(emb["bottom_half"][:-1] * emb["top_half"][1:], axis=1)
+    c_bt_tt = np.sum(emb["bottom_third"][:-1] * emb["top_third"][1:], axis=1)
+    c_mid = np.sum(emb["mid_third"][:-1] * emb["mid_third"][1:], axis=1)
+
+    s = (
+        0.15 * c_full
+        + 0.35 * c_bh_th
+        + 0.35 * c_bt_tt
+        + 0.15 * c_mid
+    )
+    return s.astype(np.float32)
+
+
+def local_margin_scores(s: np.ndarray) -> np.ndarray:
+    """m_i = s_i - (s_{i-1} + s_{i+1}) / 2; ends mirror neighbor."""
+    if s.size == 0:
+        return s.astype(np.float32)
+    n = int(s.shape[0])
+    m = np.empty(n, dtype=np.float32)
+    for i in range(n):
+        sl = float(s[i - 1]) if i > 0 else float(s[0])
+        sr = float(s[i + 1]) if i < n - 1 else float(s[-1])
+        m[i] = float(s[i]) - 0.5 * (sl + sr)
+    return m
+
+
+def pick_threshold_margin(
+    margin: np.ndarray,
+    gt_edge: np.ndarray,
+    max_chunk_pages: int,
+) -> float:
+    if margin.size == 0:
+        return 0.0
+    candidates = sorted(set(margin.tolist()))
+    candidates = [min(candidates) - 1e-4] + candidates + [max(candidates) + 1e-4]
+
+    best_tau = candidates[0]
+    best_f1 = -1.0
+    for tau in candidates:
+        pred_edge = (margin < tau).astype(np.int64)
+        pred_edge = apply_chunk_constraints(pred_edge, max_chunk_pages=max_chunk_pages)
+        f1 = hard_boundary_metrics(gt_edge, pred_edge)["f1"]
+        if f1 > best_f1:
+            best_f1 = f1
+            best_tau = tau
+    return float(best_tau)
+
+
 def apply_chunk_constraints(edge_pred: np.ndarray, max_chunk_pages: int) -> np.ndarray:
     """Force a boundary when current chunk reaches max length."""
     constrained = edge_pred.copy()
@@ -362,25 +481,48 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
         )
 
     device = choose_device(args.device)
-    embeddings = embed_pages(
-        pages=pages,
-        model_name=args.model_name,
-        device=device,
-        batch_size=args.batch_size,
-    )
-    if embeddings.shape[0] != len(pages):
-        raise RuntimeError("Embedding rows do not match page count.")
-
-    scores = cosine_adjacent(embeddings)
     gt_edge = page_end_to_edge_labels(sample.gt_page_end_labels)
-    if gt_edge.shape[0] != scores.shape[0]:
-        raise RuntimeError("GT edge labels length does not match number of adjacency scores.")
 
-    tau = args.threshold if args.threshold is not None else pick_threshold(
-        scores=scores, gt_edge=gt_edge, max_chunk_pages=args.max_chunk_pages
-    )
+    if args.legacy_full_page_cosine:
+        embeddings = embed_pages(
+            pages=pages,
+            model_name=args.model_name,
+            device=device,
+            batch_size=args.batch_size,
+        )
+        if embeddings.shape[0] != len(pages):
+            raise RuntimeError("Embedding rows do not match page count.")
+        scores = cosine_adjacent(embeddings)
+        if gt_edge.shape[0] != scores.shape[0]:
+            raise RuntimeError("GT edge labels length does not match number of adjacency scores.")
+        tau = args.threshold if args.threshold is not None else pick_threshold(
+            scores=scores, gt_edge=gt_edge, max_chunk_pages=args.max_chunk_pages
+        )
+        pred_edge = (scores < tau).astype(np.int64)
+        diagnostics_scores = {"adjacent_cosine_scores": scores.tolist(), "edge_local_margin_scores": None}
+        num_edges = int(scores.shape[0])
+    else:
+        mv_emb = embed_multiview_per_page(
+            pages=pages,
+            model_name=args.model_name,
+            device=device,
+            batch_size=args.batch_size,
+        )
+        raw_s = edge_scores_multiview(mv_emb)
+        margin_m = local_margin_scores(raw_s)
+        if gt_edge.shape[0] != margin_m.shape[0]:
+            raise RuntimeError("GT edge labels length does not match multiview edge scores.")
+        tau = args.threshold if args.threshold is not None else pick_threshold_margin(
+            margin=margin_m, gt_edge=gt_edge, max_chunk_pages=args.max_chunk_pages
+        )
+        pred_edge = (margin_m < tau).astype(np.int64)
+        diagnostics_scores = {
+            "edge_raw_multiview_scores": raw_s.tolist(),
+            "edge_local_margin_scores": margin_m.tolist(),
+            "adjacent_cosine_scores": None,
+        }
+        num_edges = int(margin_m.shape[0])
 
-    pred_edge = (scores < tau).astype(np.int64)
     pred_edge = apply_chunk_constraints(pred_edge, max_chunk_pages=args.max_chunk_pages)
     pred_page_end = edge_to_page_end_labels(pred_edge).tolist()
 
@@ -396,19 +538,20 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
             "threshold": tau,
             "max_chunk_pages": args.max_chunk_pages,
             "soft_window": args.soft_window,
+            "boundary_mode": "legacy_full_page_cosine" if args.legacy_full_page_cosine else "multiview_local_margin",
             "ground_truth_path": str(gt_path),
             "pdf_root": str(pdf_root),
             "file_name": sample.file_name,
         },
         "counts": {
             "num_pages": len(pages),
-            "num_edges": int(scores.shape[0]),
+            "num_edges": num_edges,
             "num_gt_boundaries": int(np.sum(gt_edge)),
             "num_pred_boundaries": int(np.sum(pred_edge)),
         },
         "metrics": {"hard": hard, "soft": soft},
         "diagnostics": {
-            "adjacent_cosine_scores": scores.tolist(),
+            **diagnostics_scores,
             "gt_page_end_labels": sample.gt_page_end_labels,
             "pred_page_end_labels": pred_page_end,
         },
@@ -428,6 +571,7 @@ def main() -> None:
     cfg = report["config"]
     print(f"Model: {cfg['model_name']}")
     print(f"File: {cfg['file_name']}")
+    print(f"Boundary mode: {cfg['boundary_mode']}")
     print(f"Threshold: {cfg['threshold']:.6f}")
     print("--- Hard Boundary ---")
     print(

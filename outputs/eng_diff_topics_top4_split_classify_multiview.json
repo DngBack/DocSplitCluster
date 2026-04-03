@@ -1,0 +1,295 @@
+{
+  "config": {
+    "file_name": "eng_diff_topics/eng_diff_topics_top4_shuffled.pdf",
+    "model_name": "vidore/colSmol-256M",
+    "device": "cuda",
+    "threshold": -0.12479397654533386,
+    "batch_size": 2,
+    "dpi": 150,
+    "max_chunk_pages": 4,
+    "min_chunk_pages": 1,
+    "soft_window": 1,
+    "legacy_full_page_cosine": false,
+    "keywords_json": null,
+    "keyword_queries": {
+      "finance": [
+        "finance report. Corporate financial reporting pages with monetary values and statements.",
+        "financial statement. Documents containing balance sheet, income statement, or cash-flow content.",
+        "accounting document. Accounting-oriented forms, totals, and period-based financial tables."
+      ],
+      "health": [
+        "medical document. Healthcare-related pages including diagnosis, treatment, or patient guidance.",
+        "health fact sheet. Public health educational sheets and disease/prevention information.",
+        "clinical information. Clinical terminology, screening references, and care instructions."
+      ],
+      "math": [
+        "mathematics lecture notes. Math course pages with definitions, theorems, and derivations.",
+        "homework problems. Exercise sheets containing problem statements and solution structure.",
+        "math equations. Pages dominated by formulas, symbols, and mathematical expressions."
+      ]
+    }
+  },
+  "counts": {
+    "num_pages": 27,
+    "num_pred_chunks": 10,
+    "num_gt_boundaries": 8,
+    "num_pred_boundaries": 9
+  },
+  "metrics": {
+    "boundary": {
+      "hard": {
+        "tp": 8,
+        "fp": 1,
+        "fn": 0,
+        "precision": 0.8888888888888888,
+        "recall": 1.0,
+        "f1": 0.9411764705882353,
+        "over_cut_rate": 0.05555555555555555,
+        "miss_cut_rate": 0.0
+      },
+      "soft": {
+        "window": 1,
+        "soft_tp": 8,
+        "soft_fp": 1,
+        "soft_fn": 0,
+        "soft_precision": 0.8888888888888888,
+        "soft_recall": 1.0,
+        "soft_f1": 0.9411764705882353,
+        "mean_match_credit": 1.0
+      }
+    },
+    "classification": {
+      "accuracy": 1.0,
+      "macro_precision": 1.0,
+      "macro_recall": 1.0,
+      "macro_f1": 1.0,
+      "labels": [
+        "finance",
+        "health",
+        "math"
+      ],
+      "per_class": {
+        "finance": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 4,
+          "fp": 0,
+          "fn": 0
+        },
+        "health": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 3,
+          "fp": 0,
+          "fn": 0
+        },
+        "math": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "tp": 3,
+          "fp": 0,
+          "fn": 0
+        }
+      },
+      "confusion_matrix": {
+        "finance": {
+          "finance": 4,
+          "health": 0,
+          "math": 0
+        },
+        "health": {
+          "finance": 0,
+          "health": 3,
+          "math": 0
+        },
+        "math": {
+          "finance": 0,
+          "health": 0,
+          "math": 3
+        }
+      }
+    }
+  },
+  "artifacts": {
+    "chunk_labels_path": "/home/bachdx2/DocSplitCluster/outputs/eng_diff_topics_top4_chunk_labels_multiview.json"
+  },
+  "diagnostics": {
+    "boundary_mode": "multiview_local_margin",
+    "adjacent_cosine_scores": null,
+    "edge_raw_multiview_scores": [
+      0.7934862971305847,
+      0.7465498447418213,
+      0.5083702206611633,
+      0.26912152767181396,
+      0.6394588947296143,
+      0.5212323665618896,
+      0.7165589332580566,
+      0.12223654985427856,
+      0.8440375924110413,
+      0.7526057958602905,
+      0.25344452261924744,
+      0.5515182614326477,
+      0.22960609197616577,
+      0.6053773760795593,
+      0.6665112376213074,
+      0.12882107496261597,
+      0.5638894438743591,
+      0.4346916675567627,
+      0.555081844329834,
+      0.3039379417896271,
+      0.4751068949699402,
+      0.5259475111961365,
+      0.3524744212627411,
+      0.5967786312103271,
+      0.30935508012771606,
+      0.5164636373519897
+    ],
+    "edge_local_margin_scores": [
+      0.023468226194381714,
+      0.09562158584594727,
+      0.0005345344543457031,
+      -0.30479303002357483,
+      0.24428194761276245,
+      -0.1567765474319458,
+      0.39482447504997253,
+      -0.6580617427825928,
+      0.4066164195537567,
+      0.20386473834514618,
+      -0.3986175060272217,
+      0.3099929690361023,
+      -0.34884172677993774,
+      0.15731871128082275,
+      0.2994120121002197,
+      -0.4863792657852173,
+      0.2821330726146698,
+      -0.12479397654533386,
+      0.1857670396566391,
+      -0.21115642786026,
+      0.06016416847705841,
+      0.11215685307979584,
+      -0.20888864994049072,
+      0.26586389541625977,
+      -0.24726605415344238,
+      0.10355427861213684
+    ],
+    "gt_page_end_labels": [
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1
+    ],
+    "pred_page_end_labels": [
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1
+    ],
+    "page_topic_labels": [
+      "health",
+      "health",
+      "health",
+      "health",
+      "math",
+      "math",
+      "math",
+      "math",
+      "health",
+      "health",
+      "health",
+      "math",
+      "math",
+      "finance",
+      "finance",
+      "finance",
+      "health",
+      "health",
+      "health",
+      "health",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance"
+    ],
+    "pred_page_topic_labels": [
+      "health",
+      "health",
+      "health",
+      "health",
+      "math",
+      "math",
+      "math",
+      "math",
+      "health",
+      "health",
+      "health",
+      "math",
+      "math",
+      "finance",
+      "finance",
+      "finance",
+      "health",
+      "health",
+      "health",
+      "health",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance",
+      "finance"
+    ]
+  }
+}
