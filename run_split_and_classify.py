@@ -23,17 +23,13 @@ from run_boundary_baseline import (
     DEFAULT_MODEL,
     DEFAULT_PDF_ROOT,
     choose_device,
-    cosine_adjacent,
-    edge_scores_multiview,
     edge_to_page_end_labels,
-    embed_multiview_per_page,
-    embed_pages,
     hard_boundary_metrics,
     infer_embeddings_from_output,
-    local_margin_scores,
     load_sample,
     move_to_device,
     page_end_to_edge_labels,
+    predict_page_boundaries,
     render_pdf_pages,
     soft_boundary_metrics,
 )
@@ -254,103 +250,6 @@ def page_end_to_chunks(page_end_labels: Sequence[int]) -> List[Tuple[int, int]]:
     return chunks
 
 
-def apply_min_max_chunk_constraints(
-    edge_pred: np.ndarray,
-    edge_scores: np.ndarray,
-    min_chunk_pages: int,
-    max_chunk_pages: int,
-) -> np.ndarray:
-    constrained = edge_pred.copy()
-    run_len = 1
-    for idx in range(len(constrained)):
-        wants_break = constrained[idx] == 1
-        if run_len >= max_chunk_pages:
-            constrained[idx] = 1
-            run_len = 1
-            continue
-
-        if wants_break and run_len < min_chunk_pages:
-            constrained[idx] = 0
-
-        if constrained[idx] == 1:
-            run_len = 1
-        else:
-            run_len += 1
-
-    if min_chunk_pages <= 1:
-        return constrained
-
-    final_chunk_len = run_len
-    if final_chunk_len >= min_chunk_pages:
-        return constrained
-
-    needed = min_chunk_pages - final_chunk_len
-    break_indices = np.where(constrained == 1)[0]
-    if break_indices.size == 0:
-        return constrained
-
-    candidate_breaks = [idx for idx in break_indices.tolist() if idx >= len(constrained) - needed]
-    if not candidate_breaks:
-        candidate_breaks = break_indices.tolist()
-    remove_idx = min(candidate_breaks, key=lambda i: edge_scores[i])
-    constrained[remove_idx] = 0
-    return constrained
-
-
-def pick_margin_threshold_constrained(
-    margin: np.ndarray,
-    gt_edge: np.ndarray,
-    min_chunk_pages: int,
-    max_chunk_pages: int,
-) -> float:
-    if margin.size == 0:
-        return 0.0
-    candidates = sorted(set(margin.tolist()))
-    candidates = [min(candidates) - 1e-4] + candidates + [max(candidates) + 1e-4]
-    best_tau = candidates[0]
-    best_f1 = -1.0
-    for tau in candidates:
-        pred_edge = (margin < tau).astype(np.int64)
-        pred_edge = apply_min_max_chunk_constraints(
-            pred_edge,
-            edge_scores=-margin,
-            min_chunk_pages=min_chunk_pages,
-            max_chunk_pages=max_chunk_pages,
-        )
-        f1 = hard_boundary_metrics(gt_edge, pred_edge)["f1"]
-        if f1 > best_f1:
-            best_f1 = f1
-            best_tau = tau
-    return float(best_tau)
-
-
-def pick_cosine_threshold_constrained(
-    cosine_scores: np.ndarray,
-    gt_edge: np.ndarray,
-    min_chunk_pages: int,
-    max_chunk_pages: int,
-) -> float:
-    if cosine_scores.size == 0:
-        return 0.5
-    candidates = sorted(set(cosine_scores.tolist()))
-    candidates = [min(candidates) - 1e-4] + candidates + [max(candidates) + 1e-4]
-    best_tau = candidates[0]
-    best_f1 = -1.0
-    for tau in candidates:
-        pred_edge = (cosine_scores < tau).astype(np.int64)
-        pred_edge = apply_min_max_chunk_constraints(
-            pred_edge,
-            edge_scores=-cosine_scores,
-            min_chunk_pages=min_chunk_pages,
-            max_chunk_pages=max_chunk_pages,
-        )
-        f1 = hard_boundary_metrics(gt_edge, pred_edge)["f1"]
-        if f1 > best_f1:
-            best_f1 = f1
-            best_tau = tau
-    return float(best_tau)
-
-
 def normalize_tokens(tokens: "torch.Tensor") -> "torch.Tensor":
     import torch
 
@@ -496,75 +395,19 @@ def run(args: argparse.Namespace) -> Dict[str, object]:
 
     device = choose_device(args.device)
 
-    # ----- Step 1: Boundary split (multiview + local margin, or legacy cosine) -----
+    # ----- Step 1: boundary split (shared with run_boundary_baseline.predict_page_boundaries) -----
     gt_edge = page_end_to_edge_labels(sample.gt_page_end_labels)
-    if args.legacy_full_page_cosine:
-        page_emb = embed_pages(
-            pages=pages,
-            model_name=args.model_name,
-            device=device,
-            batch_size=args.batch_size,
-        )
-        cos_scores = cosine_adjacent(page_emb)
-        if gt_edge.shape[0] != cos_scores.shape[0]:
-            raise RuntimeError("GT edge length does not match legacy cosine edge count.")
-        tau = (
-            args.threshold
-            if args.threshold is not None
-            else pick_cosine_threshold_constrained(
-                cos_scores,
-                gt_edge,
-                args.min_chunk_pages,
-                args.max_chunk_pages,
-            )
-        )
-        pred_edge = (cos_scores < tau).astype(np.int64)
-        pred_edge = apply_min_max_chunk_constraints(
-            pred_edge,
-            edge_scores=-cos_scores,
-            min_chunk_pages=args.min_chunk_pages,
-            max_chunk_pages=args.max_chunk_pages,
-        )
-        boundary_diag: Dict[str, object] = {
-            "boundary_mode": "legacy_full_page_cosine",
-            "adjacent_cosine_scores": cos_scores.tolist(),
-            "edge_raw_multiview_scores": None,
-            "edge_local_margin_scores": None,
-        }
-    else:
-        mv_emb = embed_multiview_per_page(
-            pages=pages,
-            model_name=args.model_name,
-            device=device,
-            batch_size=args.batch_size,
-        )
-        raw_s = edge_scores_multiview(mv_emb)
-        margin_m = local_margin_scores(raw_s)
-        if gt_edge.shape[0] != margin_m.shape[0]:
-            raise RuntimeError("GT edge length does not match multiview edge count.")
-        tau = (
-            args.threshold
-            if args.threshold is not None
-            else pick_margin_threshold_constrained(
-                margin_m,
-                gt_edge,
-                args.min_chunk_pages,
-                args.max_chunk_pages,
-            )
-        )
-        pred_edge = (margin_m < tau).astype(np.int64)
-        pred_edge = apply_min_max_chunk_constraints(
-            pred_edge,
-            edge_scores=-margin_m,
-            min_chunk_pages=args.min_chunk_pages,
-            max_chunk_pages=args.max_chunk_pages,
-        )
-        boundary_diag = {
-            "boundary_mode": "multiview_local_margin",
-            "adjacent_cosine_scores": None,
-            "edge_raw_multiview_scores": raw_s.tolist(),
-            "edge_local_margin_scores": margin_m.tolist(),
-        }
+    pred_edge, tau, boundary_diag = predict_page_boundaries(
+        pages,
+        model_name=args.model_name,
+        device=device,
+        batch_size=args.batch_size,
+        gt_edge=gt_edge,
+        legacy_full_page_cosine=args.legacy_full_page_cosine,
+        threshold=args.threshold,
+        min_chunk_pages=args.min_chunk_pages,
+        max_chunk_pages=args.max_chunk_pages,
+    )
     pred_page_end = edge_to_page_end_labels(pred_edge).tolist()
 
     boundary_metrics = {
